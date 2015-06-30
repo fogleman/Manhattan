@@ -1,0 +1,2 @@
+imposm.parser==1.0.7
+pyshp==1.2.3
