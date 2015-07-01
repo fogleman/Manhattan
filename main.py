@@ -1,11 +1,11 @@
 from imposm.parser import OSMParser
 from math import radians
-from util import mercator, laea, hex_color
+from util import mercator, laea, hex_color, join_ways
 import cairo
 import random
 import shapefile
 
-M = 4
+M = 6
 WIDTH = M * 1024
 HEIGHT = M * 2048
 SCALE = M * 500000
@@ -77,6 +77,17 @@ class Handler(object):
         for _, tags, members in relations:
             if 'building' in tags:
                 self.building_relations.append(members)
+    def join_ways(self, ways):
+        result = []
+        todo = []
+        for osmid in ways:
+            refs = self.ways[osmid]
+            if refs[0] == refs[-1]:
+                result.append(refs)
+            else:
+                todo.append(refs)
+        result.extend(join_ways(todo, []) or todo)
+        return result
     def render(self):
         dc = self.dc
         for osmid in self.building_ways:
@@ -84,25 +95,29 @@ class Handler(object):
             self.render_way(osmid)
             dc.fill()
         for members in self.building_relations:
+            outer = []
+            inner = []
+            for osmid, member_type, role in members:
+                if member_type == 'way':
+                    if role == 'outer':
+                        outer.append(osmid)
+                    if role == 'inner':
+                        inner.append(osmid)
             dc.set_source_rgb(*random.choice(COLORS))
-            for osmid, member_type, role in members:
-                if role == 'outer' and member_type == 'way':
-                    self.render_way(osmid)
-                    dc.fill()
+            for refs in self.join_ways(outer):
+                self.render_refs(refs)
+                dc.fill()
             dc.set_source_rgb(*BACKGROUND)
-            for osmid, member_type, role in members:
-                if role == 'inner' and member_type == 'way':
-                    self.render_way(osmid)
-                    dc.fill()
-    def render_way(self, osmid):
-        dc = self.dc
-        refs = self.ways.get(osmid, [])
-        if len(refs) < 3:
-            print osmid
-            return
+            for refs in self.join_ways(inner):
+                self.render_refs(refs)
+                dc.fill()
+    def render_refs(self, refs):
         points = [self.nodes[x] for x in refs]
         for x, y in points:
-            dc.line_to(x, y)
+            self.dc.line_to(x, y)
+    def render_way(self, osmid):
+        refs = self.ways[osmid]
+        self.render_refs(refs)
 
 def main():
     h = Handler()

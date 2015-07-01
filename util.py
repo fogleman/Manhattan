@@ -22,3 +22,31 @@ def hex_color(x):
     g = ((x >> 8) & 255) / 255.0
     b = ((x >> 0) & 255) / 255.0
     return (r, g, b)
+
+def join_ways(todo, complete):
+    if len(todo) == 0:
+        return list(complete)
+    if len(todo) == 1:
+        return list(complete) + list(todo)
+    for a in todo:
+        for b in todo:
+            if a == b:
+                continue
+            elif a[-1] == b[0]:
+                c = a + b[1:]
+            elif a[-1] == b[-1]:
+                c = a + list(reversed(b))[1:]
+            else:
+                continue
+            new_todo = list(todo)
+            new_complete = list(complete)
+            new_todo.remove(a)
+            new_todo.remove(b)
+            if c[0] == c[-1]:
+                new_complete.append(c)
+            else:
+                new_todo.append(c)
+            result = join_ways(new_todo, new_complete)
+            if result:
+                return result
+    return None
