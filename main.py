@@ -57,6 +57,8 @@ class Handler(object):
     def __init__(self):
         self.nodes = {}
         self.ways = {}
+        self.building_ways = []
+        self.building_relations = []
         self.surface = cairo.ImageSurface(cairo.FORMAT_RGB24, WIDTH, HEIGHT)
         self.dc = create_dc(self.surface)
         clip_to_manhattan(self.dc)
@@ -67,42 +69,46 @@ class Handler(object):
         for osmid, _, (lng, lat) in nodes:
             self.nodes[osmid] = project(lat, lng)
     def on_ways(self, ways):
-        dc = self.dc
         for osmid, tags, refs in ways:
             self.ways[osmid] = refs
-            if 'building' not in tags:
-                continue
+            if 'building' in tags:
+                self.building_ways.append(osmid)
+    def on_relations(self, relations):
+        for _, tags, members in relations:
+            if 'building' in tags:
+                self.building_relations.append(members)
+    def render(self):
+        dc = self.dc
+        for osmid in self.building_ways:
             dc.set_source_rgb(*random.choice(COLORS))
             self.render_way(osmid)
             dc.fill()
-    def on_relations(self, relations):
-        dc = self.dc
-        for _, tags, members in relations:
-            if 'building' not in tags:
-                continue
+        for members in self.building_relations:
             dc.set_source_rgb(*random.choice(COLORS))
-            for osmid, _, role in members:
-                if role != 'outer':
-                    continue
-                self.render_way(osmid)
-                dc.fill()
+            for osmid, member_type, role in members:
+                if role == 'outer' and member_type == 'way':
+                    self.render_way(osmid)
+                    dc.fill()
             dc.set_source_rgb(*BACKGROUND)
-            for osmid, _, role in members:
-                if role != 'inner':
-                    continue
-                self.render_way(osmid)
-                dc.fill()
+            for osmid, member_type, role in members:
+                if role == 'inner' and member_type == 'way':
+                    self.render_way(osmid)
+                    dc.fill()
     def render_way(self, osmid):
         dc = self.dc
         refs = self.ways.get(osmid, [])
-        points = [self.nodes.get(x) for x in refs]
+        if len(refs) < 3:
+            print osmid
+            return
+        points = [self.nodes[x] for x in refs]
         for x, y in points:
             dc.line_to(x, y)
 
 def main():
     h = Handler()
-    p = OSMParser(1, h.on_nodes, h.on_ways, h.on_relations, h.on_coords)
+    p = OSMParser(None, h.on_nodes, h.on_ways, h.on_relations, h.on_coords)
     p.parse('osm/nyc.osm.pbf')
+    h.render()
     h.surface.write_to_png('output.png')
 
 if __name__ == '__main__':
